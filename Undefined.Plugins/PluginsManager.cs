@@ -1,6 +1,9 @@
 ﻿using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.Loader;
+using Undefined.Events;
+using Undefined.Plugins.Events.Load;
+using Undefined.Plugins.Events.Status;
 using Undefined.Plugins.Exceptions;
 
 namespace Undefined.Plugins;
@@ -12,8 +15,10 @@ public class PluginsManager<TBase> : IPluginsManager where TBase : PluginBase
     private readonly FieldInfo _pluginManagerField =
         typeof(PluginBase).GetField("<PluginsManager>k__BackingField", BindingFlags.Instance | BindingFlags.NonPublic)!;
 
-    
-    
+    private readonly Event<PluginLoadedEventArgs> _onPluginLoaded = new();
+    private readonly Event<PluginEnabledEventArgs> _onPluginEnabled = new();
+    private readonly Event<PluginDisabledEventArgs> _onPluginDisabled = new();
+
     private readonly Type _pluginBase;
     private readonly PluginUpdater _pluginUpdater;
     private readonly DllDirectory _pluginsDirectory;
@@ -27,6 +32,10 @@ public class PluginsManager<TBase> : IPluginsManager where TBase : PluginBase
     public IReadOnlyList<TBase> Plugins => _plugins.AsReadOnly();
 
     IReadOnlyList<PluginBase> IPluginsManager.Plugins => Plugins;
+
+    public IEventAccess<PluginLoadedEventArgs> OnPluginLoaded => _onPluginLoaded.Access;
+    public IEventAccess<PluginEnabledEventArgs> OnPluginEnabled => _onPluginEnabled.Access;
+    public IEventAccess<PluginDisabledEventArgs> OnPluginDisabled => _onPluginDisabled.Access;
 
 
     public PluginsManager(string pluginsDirectory, string librariesDirectory)
@@ -45,6 +54,7 @@ public class PluginsManager<TBase> : IPluginsManager where TBase : PluginBase
         if (!plugin.IsEnabled)
             throw new PluginException("Plugin is already disabled.");
         _pluginUpdater.InvokePluginAction(plugin, PluginAction.Disable);
+        _onPluginDisabled.Raise(new PluginDisabledEventArgs(plugin));
     }
 
     public void EnablePlugin(PluginBase plugin)
@@ -52,6 +62,7 @@ public class PluginsManager<TBase> : IPluginsManager where TBase : PluginBase
         if (plugin.IsEnabled)
             throw new PluginException("Plugin is already enabled.");
         _pluginUpdater.InvokePluginAction(plugin, PluginAction.Enable);
+        _onPluginEnabled.Raise(new PluginEnabledEventArgs(plugin));
     }
 
     public void UnloadPlugin(PluginBase pluginBase)
@@ -81,13 +92,13 @@ public class PluginsManager<TBase> : IPluginsManager where TBase : PluginBase
         try
         {
             ctor.Invoke(plugin, null);
+            _onPluginLoaded.Raise(new PluginLoadedEventArgs(plugin));
         }
         catch (Exception e)
         {
             if (e is not TargetInvocationException tie) throw;
             return new PluginLoadResult<TBase>(tie.InnerException ?? e);
         }
-
         _pluginsTypes.Add(type, plugin);
         _plugins.Add(plugin);
         return new PluginLoadResult<TBase>(plugin);
@@ -98,7 +109,9 @@ public class PluginsManager<TBase> : IPluginsManager where TBase : PluginBase
     IPluginLoadResult IPluginsManager.LoadPlugin(string file) => LoadPlugin(file);
 
     public IEnumerable<PluginLoadResult<TBase>> LoadPluginWithReferences(string file) => LoadPluginInternal(file, true);
-    IEnumerable<IPluginLoadResult> IPluginsManager.LoadPluginWithReferences(string file) => LoadPluginInternal(file, true);
+
+    IEnumerable<IPluginLoadResult> IPluginsManager.LoadPluginWithReferences(string file) =>
+        LoadPluginInternal(file, true);
 
     private IEnumerable<PluginLoadResult<TBase>> LoadPluginInternal(string file, bool tryLoadReferences)
     {

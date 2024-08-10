@@ -1,10 +1,10 @@
 namespace Undefined.Plugins.Events.Load;
 
-public class PluginLoadEventArgs : PluginEventArgs
+public class PluginLoadedEventArgs : PluginEventArgs
 {
     public override PluginBase Plugin { get; }
 
-    public PluginLoadEventArgs(PluginBase plugin)
+    public PluginLoadedEventArgs(PluginBase plugin)
     {
         Plugin = plugin;
     }

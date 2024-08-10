@@ -1,10 +1,10 @@
 namespace Undefined.Plugins.Events.Status;
 
-public class PluginDisableEventArgs : PluginEventArgs
+public class PluginDisabledEventArgs : PluginEventArgs
 {
     public override PluginBase Plugin { get; }
 
-    public PluginDisableEventArgs(PluginBase plugin)
+    public PluginDisabledEventArgs(PluginBase plugin)
     {
         Plugin = plugin;
     }

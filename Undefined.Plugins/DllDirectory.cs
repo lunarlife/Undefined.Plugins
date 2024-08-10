@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Reflection.Emit;
 using System.Runtime.Loader;
 using Undefined.Plugins.Exceptions;
 
@@ -29,7 +30,7 @@ public class DllDirectory
         _tempDirectory = Path.Combine(dllsDirectory, ".temp");
         var info = new DirectoryInfo(_tempDirectory);
         if (!info.Exists) info.Create();
-        info.Attributes |= FileAttributes.Hidden ;
+        info.Attributes |= FileAttributes.Hidden;
     }
 
     public IEnumerable<Reference> LoadReference(string file, bool tryLoadReferences)
@@ -74,7 +75,9 @@ public class DllDirectory
     private Reference LoadRefInternal(string fileOriginal)
     {
         var copyFile = CopyDllToTemp(fileOriginal);
-        var assembly = _context.LoadFromAssemblyPath(copyFile);
+        Assembly assembly;
+        assembly = _context.LoadFromAssemblyPath(copyFile);
+        using (_context.EnterContextualReflection()) Assembly.Load(assembly.GetName());
         var assemblyName = assembly.GetName();
         if (_referencesNames.ContainsKey(assemblyName.Name!))
             throw new PluginLoadException($"Reference with name {assemblyName.Name} already loaded.");
@@ -112,6 +115,7 @@ public class DllDirectory
                     notLoaded.Add(info);
                     continue;
                 }
+
                 LoadRefInternal(info.OriginalFile);
             }
         }
