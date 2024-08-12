@@ -1,4 +1,4 @@
-namespace Undefined.Plugins.Events.Load;
+namespace Undefined.Plugins.Events.Plugins;
 
 public class PluginLoadedEventArgs : PluginEventArgs
 {

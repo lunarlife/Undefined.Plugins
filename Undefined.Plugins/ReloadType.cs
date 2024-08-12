@@ -1,7 +1,8 @@
 namespace Undefined.Plugins;
 
+[Flags]
 public enum ReloadType
 {
-    LoadEverything,
-    ReloadExisted
+    LoadNew = 1 << 0,
+    ReloadExisted = 1 << 1
 }

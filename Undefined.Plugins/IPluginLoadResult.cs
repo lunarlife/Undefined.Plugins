@@ -9,9 +9,9 @@ public interface IPluginLoadResult
 
 public class PluginLoadResult<T> : IPluginLoadResult where T : PluginBase
 {
+    public T? Plugin { get; }
     public Exception? Exception { get; }
     public PluginLoadStatus Status { get; }
-    public T? Plugin { get; }
 
     PluginBase? IPluginLoadResult.Plugin => Plugin;
 

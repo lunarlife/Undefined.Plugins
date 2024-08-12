@@ -1,13 +1,13 @@
-namespace Undefined.Plugins;
+namespace Undefined.Plugins.Libraries;
 
-public class ReferenceInfo : IEquatable<ReferenceInfo>
+public class LibraryInfo : IEquatable<LibraryInfo>
 {
     public string Name { get; }
     public string OriginalFile { get; }
     public string TempFile { get; }
     public Version Version { get; }
 
-    public ReferenceInfo(string name, string originalFile, string tempFile, Version version)
+    public LibraryInfo(string name, string originalFile, string tempFile, Version version)
     {
         Name = name;
         OriginalFile = originalFile;
@@ -15,7 +15,7 @@ public class ReferenceInfo : IEquatable<ReferenceInfo>
         Version = version;
     }
 
-    public bool Equals(ReferenceInfo? other)
+    public bool Equals(LibraryInfo? other)
     {
         if (ReferenceEquals(null, other)) return false;
         if (ReferenceEquals(this, other)) return true;
@@ -26,8 +26,8 @@ public class ReferenceInfo : IEquatable<ReferenceInfo>
     {
         if (ReferenceEquals(null, obj)) return false;
         if (ReferenceEquals(this, obj)) return true;
-        if (obj.GetType() != this.GetType()) return false;
-        return Equals((ReferenceInfo)obj);
+        if (obj.GetType() != GetType()) return false;
+        return Equals((LibraryInfo)obj);
     }
 
     public override int GetHashCode() => HashCode.Combine(Name, Version);

@@ -1,6 +1,6 @@
 using Undefined.Events;
 
-namespace Undefined.Plugins.Events;
+namespace Undefined.Plugins.Events.Plugins;
 
 public abstract class PluginEventArgs : IEventArgs
 {

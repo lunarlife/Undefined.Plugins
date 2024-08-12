@@ -1,4 +1,4 @@
-namespace Undefined.Plugins.Events.Status;
+namespace Undefined.Plugins.Events.Plugins;
 
 public class PluginEnabledEventArgs : PluginEventArgs
 {
