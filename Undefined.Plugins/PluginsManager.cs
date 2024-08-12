@@ -7,12 +7,12 @@ using Undefined.Plugins.Libraries;
 
 namespace Undefined.Plugins;
 
-public class PluginsManager<TBase> : IPluginsManager where TBase : PluginBase
+public class PluginsManager<TBase> : IPluginsManager where TBase : PluginBase<TBase>
 {
     private static readonly Type BaseType = typeof(TBase);
     private readonly LibrariesDirectory _librariesDirectory;
 
-    private readonly Event<PluginLoadedEventArgs> _onPluginLoaded = new();
+    private readonly Event<PluginLoadedEventArgs<TBase>> _onPluginLoaded = new();
 
     private readonly Type _pluginBase;
     private readonly List<TBase> _plugins = [];
@@ -20,14 +20,13 @@ public class PluginsManager<TBase> : IPluginsManager where TBase : PluginBase
     private readonly Dictionary<ILibrary, TBase> _pluginsLibraries = [];
     private readonly Dictionary<string, TBase> _pluginsNames = [];
     private readonly Dictionary<Type, TBase> _pluginsTypes = [];
-    
+
     private ILibrary? _mainPluginReference;
-    
-    public IEventAccess<PluginLoadedEventArgs> OnPluginLoaded => _onPluginLoaded.Access;
+
+    public IEventAccess<PluginLoadedEventArgs<TBase>> OnPluginLoaded => _onPluginLoaded.Access;
     public TBase? MainPlugin { get; private set; }
+    public IReadOnlyList<TBase> Plugins => new List<TBase>(_plugins);
     public IReadOnlyList<LibrariesDirectory> Directories { get; }
-    public IReadOnlyList<TBase> Plugins => _plugins.AsReadOnly();
-    IReadOnlyList<PluginBase> IPluginsManager.Plugins => Plugins;
 
 
     private PluginsManager(string pluginsDirectory, string librariesDirectory)
@@ -42,143 +41,46 @@ public class PluginsManager<TBase> : IPluginsManager where TBase : PluginBase
         Directories = [_pluginsDirectory, _librariesDirectory];
     }
 
+    public void Dispose()
+    {
+        foreach (var plugin in Plugins) plugin.Unload();
+    }
 
-    public void DisablePlugin(PluginBase plugin)
+    IPluginBase? IPluginsManager.GetPlugin(ILibrary library)
+    {
+        TryGetPlugin(library, out var plugin);
+        return plugin;
+    }
+
+
+    public void ToggleEnablePlugin(TBase plugin) => plugin.ToggleEnable();
+
+    public void DisablePlugin(TBase plugin)
     {
         if (!plugin.IsEnabled)
             throw new PluginException("Plugin is already disabled.");
         plugin.DoActionInternal(PluginAction.Disable);
     }
 
-    public void EnablePlugin(PluginBase plugin)
+    public void EnablePlugin(TBase plugin)
     {
         if (plugin.IsEnabled)
             throw new PluginException("Plugin is already enabled.");
         plugin.DoActionInternal(PluginAction.Enable);
     }
 
-    public void UnloadPlugin(PluginBase plugin)
+    public bool TryUnloadPlugin(TBase plugin)
     {
-        UnloadPlugin(plugin as TBase ??
-                     throw new PluginUnloadException($"Plugin {plugin.Data.Name} is not {typeof(TBase).Name}."));
-    }
-
-    public RuntimeLibrary LoadLibrary(string fileName) =>
-        _librariesDirectory.LoadLibrary(fileName);
-
-    public IReadOnlyList<RuntimeLibrary> LoadLibraryWithReferences(string fileName) =>
-        _librariesDirectory.LoadLibraryWithReferences(fileName);
-
-    IPluginLoadResult IPluginsManager.LoadPlugin(string file, bool enable) =>
-        LoadPlugin(file, enable);
-
-    IReadOnlyList<IPluginLoadResult> IPluginsManager.LoadPluginWithReferences(string file, bool enable) =>
-        LoadPluginWithReferences(file, enable);
-
-    IPluginLoadResult IPluginsManager.ReloadPlugin(PluginBase plugin)
-    {
-        if (plugin is not TBase pluginBase)
-            throw new PluginException(
-                $"In the current {nameof(PluginsManager<TBase>)} all plugins must inherit from {nameof(TBase)}.");
-        return ReloadPlugin(pluginBase);
-    }
-
-    IReadOnlyList<IPluginLoadResult> IPluginsManager.Reload(ReloadType reloadType) => Reload(reloadType);
-
-    IReadOnlyList<PluginBase> IPluginsManager.GetPlugins(Type type)
-    {
-        if (!BaseType.IsAssignableFrom(type))
-            throw new PluginException(
-                $"In the current {nameof(PluginsManager<TBase>)} all plugins must inherit from {nameof(TBase)}.");
-        if (type == BaseType)
-            return GetPlugin(type) is { } plugin ? [plugin] : [];
-        var plugins = new List<PluginBase>();
-        foreach (var plugin in _plugins)
-        {
-            if (!type.IsInstanceOfType(plugin))
-                continue;
-            plugins.Add(plugin);
-        }
-
-        return plugins;
-    }
-
-    PluginBase? IPluginsManager.GetPlugin(Type type)
-    {
-        if (!BaseType.IsAssignableFrom(type))
-            throw new PluginException(
-                $"In the current {nameof(PluginsManager<TBase>)} all plugins must inherit from {nameof(TBase)}.");
-        if (type is not { IsAbstract: false, IsClass: true })
-            throw new PluginException("Type must be instantiable class.");
-        TryGetPlugin(type, out var plugin);
-        return plugin;
-    }
-
-    bool IPluginsManager.TryGetPlugin(string pluginName, out PluginBase? plugin)
-    {
-        if (TryGetPlugin(pluginName, out var pl))
-        {
-            plugin = pl;
-            return true;
-        }
-
-        plugin = null;
-        return false;
-    }
-
-    bool IPluginsManager.TryGetPlugin(Type type, out PluginBase? plugin)
-    {
-        if (TryGetPlugin(type, out var pl))
-        {
-            plugin = pl;
-            return true;
-        }
-
-        plugin = null;
-        return false;
-    }
-
-    bool IPluginsManager.HasPlugin(PluginBase plugin) => plugin is TBase pluginBase && _plugins.Contains(pluginBase);
-
-    public bool HasPlugin(Type type) => GetPlugin(type) != null;
-
-    public bool TryGetPlugin(ILibrary library, out PluginBase? plugin)
-    {
-        if (_pluginsLibraries.TryGetValue(library, out var pl))
-        {
-            plugin = pl;
-            return true;
-        }
-
-        plugin = null;
-        return false;
-    }
-
-    public void Dispose()
-    {
-        for (var i = 0; i < _plugins.Count; i++) UnloadPlugin(_plugins[i]);
-    }
-
-    private PluginLoadResult<TMain> LoadMain<TMain>(bool enable) where TMain : TBase, new()
-    {
-        var type = typeof(TMain);
-        var assembly = type.Assembly;
-        var assemblyName = assembly.GetName();
-        var info = new LibraryInfo(assemblyName.Name!, assembly.Location, assembly.Location, assemblyName.Version!);
-        _mainPluginReference = new StaticLibrary(info, assembly);
-        var result = CreateInstance<TMain>(type, _mainPluginReference, enable);
-        if (result.Status == PluginLoadStatus.Error)
-            return result;
-        MainPlugin = result.Plugin;
-        return result;
+        if (!HasPlugin(plugin)) return false;
+        if (!plugin.Data.IsUnloadable) return false;
+        UnloadPluginInternal(plugin);
+        (plugin.Data.Library as RuntimeLibrary)?.Unload();
+        return true;
     }
 
     public void UnloadPlugin(TBase plugin)
     {
-        if (!HasPlugin(plugin)) return;
-        if (!plugin.Data.IsUnloadable) throw new PluginUnloadException("Plugin is not unloadable.");
-        UnloadPluginInternal(plugin);
-        (plugin.Data.Library as RuntimeLibrary)?.Unload();
+        if (!TryUnloadPlugin(plugin)) throw new PluginUnloadException("Plugin is not unloadable.");
     }
 
     private void UnloadPluginInternal(TBase plugin)
@@ -195,29 +97,49 @@ public class PluginsManager<TBase> : IPluginsManager where TBase : PluginBase
         _pluginsLibraries.Remove(plugin.Data.Library);
     }
 
-    private PluginLoadResult<T> CreateInstance<T>(Type type, ILibrary library, bool enable) where T : TBase
+    public RuntimeLibrary LoadLibrary(string fileName) =>
+        _librariesDirectory.LoadLibrary(fileName);
+
+    public IReadOnlyList<RuntimeLibrary> LoadLibraryWithReferences(string fileName) =>
+        _librariesDirectory.LoadLibraryWithReferences(fileName);
+
+    private PluginLoadResult<TBase> LoadMain<TMain>(bool enable) where TMain : TBase, new()
+    {
+        var type = typeof(TMain);
+        var assembly = type.Assembly;
+        var assemblyName = assembly.GetName();
+        var info = new LibraryInfo(assemblyName.Name!, assembly.Location, assembly.Location, assemblyName.Version!);
+        _mainPluginReference = new StaticLibrary(info, assembly);
+        var result = CreateInstance(type, _mainPluginReference, enable);
+        if (result.Status == PluginLoadStatus.Error)
+            return result;
+        MainPlugin = result.Plugin;
+        return result;
+    }
+
+    private PluginLoadResult<TBase> CreateInstance(Type type, ILibrary library, bool enable)
     {
         if (type.GetCustomAttributes().FirstOrDefault(att => att is PluginAttribute) is not PluginAttribute attribute)
-            return new PluginLoadResult<T>(
+            return new PluginLoadResult<TBase>(
                 new PluginLoadException($"Plugin type {type.Name} has no {nameof(PluginAttribute)}."));
 
         if (_pluginsTypes.ContainsKey(type))
-            return new PluginLoadResult<T>(new PluginLoadException($"Plugin type {type.Name} is already loaded."));
+            return new PluginLoadResult<TBase>(new PluginLoadException($"Plugin type {type.Name} is already loaded."));
         if (type is not { IsAbstract: false, IsClass: true })
-            return new PluginLoadResult<T>(new PluginLoadException(
+            return new PluginLoadResult<TBase>(new PluginLoadException(
                 $"The {type.Name} type cannot be loaded as a plugin because it does not instantiable class."));
 
         if (type.GetConstructors(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
                 .FirstOrDefault(c => c.GetParameters().Length == 0) is not { } ctor)
-            return new PluginLoadResult<T>(
+            return new PluginLoadResult<TBase>(
                 new PluginLoadException($"Plugin type {type.Name} has no constructors without parameters."));
 
-        var plugin = (T)RuntimeHelpers.GetUninitializedObject(type);
+        var plugin = (TBase)RuntimeHelpers.GetUninitializedObject(type);
         plugin.Init(library, this, attribute);
         try
         {
             ctor.Invoke(plugin, null);
-            _onPluginLoaded.Raise(new PluginLoadedEventArgs(plugin));
+            _onPluginLoaded.Raise(new PluginLoadedEventArgs<TBase>(plugin));
             _pluginsTypes.Add(type, plugin);
             _pluginsNames.Add(plugin.Data.Name, plugin);
             _pluginsLibraries.Add(library, plugin);
@@ -227,10 +149,10 @@ public class PluginsManager<TBase> : IPluginsManager where TBase : PluginBase
         catch (Exception e)
         {
             if (e is not TargetInvocationException tie) throw;
-            return new PluginLoadResult<T>(tie.InnerException ?? e);
+            return new PluginLoadResult<TBase>(tie.InnerException ?? e);
         }
 
-        return new PluginLoadResult<T>(plugin);
+        return new PluginLoadResult<TBase>(plugin);
     }
 
 
@@ -260,15 +182,11 @@ public class PluginsManager<TBase> : IPluginsManager where TBase : PluginBase
 
             if (pluginType is null)
                 throw new PluginLoadException($"Assembly {assembly.FullName} has no plugin type.");
-            list.Add(CreateInstance<TBase>(pluginType, reference, enable));
+            list.Add(CreateInstance(pluginType, reference, enable));
         }
 
         return list;
     }
-
-    public void DisablePlugin(TBase plugin) => DisablePlugin((PluginBase)plugin);
-
-    public void EnablePlugin(TBase plugin) => EnablePlugin((PluginBase)plugin);
 
     public IReadOnlyList<PluginLoadResult<TBase>> Reload(ReloadType reloadType)
     {
@@ -289,14 +207,71 @@ public class PluginsManager<TBase> : IPluginsManager where TBase : PluginBase
 
     public PluginLoadResult<TBase> ReloadPlugin(TBase plugin)
     {
-        if (!plugin.Data.IsPossibleReload)
+        if (!TryReloadPlugin(plugin, out var result))
             throw new PluginReloadException($"Not possible to reload plugin with {nameof(StaticLibrary)}.");
+        return result!;
+    }
+
+    public bool TryReloadPlugin(TBase plugin, out PluginLoadResult<TBase>? result)
+    {
+        if (!plugin.Data.IsPossibleReload)
+        {
+            result = null;
+            return false;
+        }
+
         var library = (RuntimeLibrary)plugin.Data.Library;
         var type = plugin.GetType();
         UnloadPluginInternal(plugin);
         library.UnloadDllInternal();
         library.LoadDllInternal();
-        return CreateInstance<TBase>(type, library, true);
+        result = CreateInstance(type, library, true);
+        return true;
+    }
+
+    public IReadOnlyList<T> GetPlugins<T>() where T : TBase => (IReadOnlyList<T>)GetPlugins(typeof(T));
+
+    public IReadOnlyList<TBase> GetPlugins(Type type)
+    {
+        if (!BaseType.IsAssignableFrom(type))
+            throw new PluginException(
+                $"In the current {nameof(PluginsManager<TBase>)} all plugins must inherit from {nameof(TBase)}.");
+        if (type == BaseType)
+            return GetPlugin(type) is { } plugin ? [plugin] : [];
+        var plugins = new List<TBase>();
+        foreach (var plugin in _plugins)
+        {
+            if (!type.IsInstanceOfType(plugin))
+                continue;
+            plugins.Add(plugin);
+        }
+
+        return plugins;
+    }
+
+    public T? GetPlugin<T>() where T : TBase, new() => GetPlugin(typeof(T)) as T;
+
+    public TBase? GetPlugin(Type type)
+    {
+        if (!BaseType.IsAssignableFrom(type))
+            throw new PluginException(
+                $"In the current {nameof(PluginsManager<TBase>)} all plugins must inherit from {nameof(TBase)}.");
+        if (type is not { IsAbstract: false, IsClass: true })
+            throw new PluginException("Type must be instantiable class.");
+        TryGetPlugin(type, out var plugin);
+        return plugin;
+    }
+
+    public bool TryGetPlugin(ILibrary library, out TBase? plugin)
+    {
+        if (_pluginsLibraries.TryGetValue(library, out var pl))
+        {
+            plugin = pl;
+            return true;
+        }
+
+        plugin = null;
+        return false;
     }
 
     public bool TryGetPlugin<T>(out T? plugin) where T : TBase, new()
@@ -312,14 +287,6 @@ public class PluginsManager<TBase> : IPluginsManager where TBase : PluginBase
         return false;
     }
 
-    public IReadOnlyList<T> GetPlugins<T>() where T : TBase => (IReadOnlyList<T>)GetPlugins(typeof(T));
-
-    public IReadOnlyList<TBase> GetPlugins(Type type) => (IReadOnlyList<TBase>)((IPluginsManager)this).GetPlugins(type);
-
-    public T? GetPlugin<T>() where T : TBase, new() => GetPlugin(typeof(T)) as T;
-
-    public TBase? GetPlugin(Type type) => ((IPluginsManager)this).GetPlugin(type) as TBase;
-
     public bool TryGetPlugin(Type type, out TBase? plugin)
     {
         if (_pluginsTypes.TryGetValue(type, out var pl))
@@ -331,7 +298,6 @@ public class PluginsManager<TBase> : IPluginsManager where TBase : PluginBase
         plugin = null;
         return false;
     }
-
 
     public bool TryGetPlugin(string pluginName, out TBase? plugin)
     {
@@ -345,15 +311,15 @@ public class PluginsManager<TBase> : IPluginsManager where TBase : PluginBase
         return false;
     }
 
-    public bool HasPlugin(TBase plugin) => ((IPluginsManager)this).HasPlugin(plugin);
-
+    public bool HasPlugin(Type type) => GetPlugin(type) != null;
+    public bool HasPlugin(TBase plugin) => _plugins.Contains(plugin);
     public bool HasPlugin<T>() where T : TBase, new() => TryGetPlugin<T>(out _);
 
     public static PluginsManager<TBase> Create(string pluginsDirectory, string librariesDirectory) =>
         new(pluginsDirectory, librariesDirectory);
 
     public static PluginsManager<TBase> Create<TMain>(string pluginsDirectory, string librariesDirectory,
-        out PluginLoadResult<TMain> mainLoadResult,
+        out PluginLoadResult<TBase> mainLoadResult,
         bool enableMain = true) where TMain : TBase, new()
     {
         var manager = new PluginsManager<TBase>(pluginsDirectory, librariesDirectory);
@@ -361,7 +327,7 @@ public class PluginsManager<TBase> : IPluginsManager where TBase : PluginBase
         return manager;
     }
 
-    public static PluginsManager<TBase> Create<TMain>(out PluginLoadResult<TMain> mainLoadResult,
+    public static PluginsManager<TBase> Create<TMain>(out PluginLoadResult<TBase> mainLoadResult,
         bool enableMain = true) where TMain : TBase, new() =>
-        Create("plugins", "libraries", out mainLoadResult, enableMain);
+        Create<TMain>("plugins", "libraries", out mainLoadResult, enableMain);
 }

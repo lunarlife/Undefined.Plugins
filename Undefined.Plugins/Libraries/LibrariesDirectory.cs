@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Runtime.Loader;
 using Undefined.Events;
 using Undefined.Plugins.Events.Libraries;
 using Undefined.Plugins.Exceptions;
@@ -13,7 +14,7 @@ public class LibrariesDirectory
     private readonly Dictionary<LibraryData, RuntimeLibrary> _librariesData = [];
     private readonly Event<LibraryLoadedEventArgs> _onLibraryLoaded = new();
 
-    public IPluginsManager PluginsManager { get; }
+    internal IPluginsManager PluginsManager { get; }
 
     public IReadOnlyList<RuntimeLibrary> Libraries => _libraries.AsReadOnly();
     public IEventAccess<LibraryLoadedEventArgs> OnLibraryLoaded => _onLibraryLoaded.Access;
@@ -24,7 +25,7 @@ public class LibrariesDirectory
 
     public string DllsDirectory { get; }
 
-    public LibrariesDirectory(DirectoryType folderType, string dllsDirectory, IPluginsManager pluginsManager)
+    internal LibrariesDirectory(DirectoryType folderType, string dllsDirectory, IPluginsManager pluginsManager)
     {
         PluginsManager = pluginsManager;
         Type = folderType;
@@ -95,6 +96,7 @@ public class LibrariesDirectory
 
         _librariesData.Add(new LibraryData(name, version), loadedLibrary);
         _libraries.Add(loadedLibrary);
+        using (loadedLibrary.Context.EnterContextualReflection()) Assembly.Load(assemblyName);        
         foreach (var library in _libraries)
         {
             if (library == loadedLibrary) continue;

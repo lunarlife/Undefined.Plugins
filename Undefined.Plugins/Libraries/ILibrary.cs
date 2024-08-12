@@ -52,22 +52,13 @@ public class RuntimeLibrary : ILibrary
         Context = new UndefinedAssemblyLoadContext(this, $"{Directory.Type}_{Info.Name}_{Info.Version}");
         _stream = File.OpenRead(Info.TempFile);
         Assembly = Context.LoadFromStream(_stream);
-        UpdateReflectionInternal();
         IsLoaded = true;
-    }
-
-    internal void UpdateReflectionInternal()
-    {
-        using (Context.EnterContextualReflection())
-        {
-            Assembly.Load(Assembly.GetName());
-        }
     }
 
     public void Unload()
     {
-        if (Directory.PluginsManager.TryGetPlugin(this, out var plugin) && !plugin!.Data.IsUnloadable)
-            throw new LibraryUnloadException("Reference is not unloadable.");
+        if (Directory.PluginsManager.GetPlugin(this) is { Data.IsUnloadable: false })
+            throw new LibraryUnloadException("Library is not unloadable.");
         UnloadDllInternal();
         Directory.UnloadLibraryInternal(this);
     }

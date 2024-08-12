@@ -18,4 +18,6 @@ public class PluginData
         IsUnloadable = isUnloadable;
         IsPossibleReload = library is RuntimeLibrary;
     }
+
+    public override string ToString() => $"{Name}({Version})";
 }

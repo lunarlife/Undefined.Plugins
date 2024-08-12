@@ -12,4 +12,6 @@ public struct PluginVersion
         Minor = minor;
         Revision = revision;
     }
+
+    public override string ToString() => $"{Major}.{Minor}.{Revision}";
 }

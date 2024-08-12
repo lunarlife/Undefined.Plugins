@@ -1,10 +1,10 @@
 namespace Undefined.Plugins.Events.Plugins;
 
-public class PluginUnloadEventArgs : PluginEventArgs
+public class PluginUnloadEventArgs<T> : PluginEventArgs<T> where T : PluginBase<T>
 {
-    public override PluginBase Plugin { get; }
+    public override PluginBase<T> Plugin { get; }
 
-    public PluginUnloadEventArgs(PluginBase plugin)
+    public PluginUnloadEventArgs(PluginBase<T> plugin)
     {
         Plugin = plugin;
     }

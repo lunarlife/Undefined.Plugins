@@ -5,12 +5,23 @@
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <TargetFrameworks>net6.0;net7.0;net8.0;net9.0</TargetFrameworks>
+        <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+        <Title>Undefined.Plugins</Title>
+        <Authors>LunarLife</Authors>
+        <Copyright>Copyright © LunarLife 2024</Copyright>
+        <PackageProjectUrl>https://github.com/lunarlife/Undefined.Plugins</PackageProjectUrl>
+        <RepositoryUrl>https://github.com/lunarlife/Undefined.Plugins</RepositoryUrl>
+        <PackageTags>plugin mod extension</PackageTags>
+        <Version>1.0.1</Version>
+        <PackageLicenseFile>LICENSE</PackageLicenseFile>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
     </PropertyGroup>
     <ItemGroup>
         <None Include="../LICENSE" Pack="true" PackagePath=""/>
+        <None Include="../README.md" Pack="true" PackagePath=""/>
     </ItemGroup>
     <ItemGroup>
-        <PackageReference Include="Undefined.Events" Version="1.0.4"/>
+        <PackageReference Include="Undefined.Events" Version="1.1.0"/>
         <PackageReference Include="Undefined.IsExternalInit" Version="1.0.0"/>
         <PackageReference Include="Undefined.Verify" Version="2.0.0"/>
     </ItemGroup>
